@@ -4,8 +4,6 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 model Business {
@@ -22,15 +20,19 @@ model User {
   email      String   @unique
   password   String
   name       String
-  businessId String
-  business   Business @relation(fields: [businessId], references: [id])
-  createdAt  DateTime @default(now())
+  phone      String?
+  businessId         String
+  business           Business @relation(fields: [businessId], references: [id])
+  resetPasswordToken String?
+  resetPasswordExpires DateTime?
+  createdAt          DateTime @default(now())
 }
 
 model Product {
   id          String   @id @default(uuid())
   name        String
   description String?
+  barcode     String?
   buyPrice    Float
   sellPrice   Float
   stock       Int      @default(0)
@@ -40,6 +42,8 @@ model Product {
   saleItems   SaleItem[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@unique([barcode, businessId])
 }
 
 model Sale {

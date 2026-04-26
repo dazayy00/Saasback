@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 import prisma from '../config/db';
 
 const generateToken = (id: string, businessId: string) => {
@@ -11,7 +13,7 @@ const generateToken = (id: string, businessId: string) => {
 
 export const registerBusiness = async (req: Request, res: Response) => {
   try {
-    const { businessName, name, email, password } = req.body;
+    const { businessName, name, email, password, phone } = req.body;
 
     const userExists = await prisma.user.findUnique({ where: { email } });
     if (userExists) {
@@ -30,6 +32,7 @@ export const registerBusiness = async (req: Request, res: Response) => {
           create: {
             name,
             email,
+            phone,
             password: hashedPassword,
           },
         },
@@ -71,5 +74,89 @@ export const loginUser = async (req: Request, res: Response) => {
     }
   } catch (error) {
     res.status(500).json({ message: 'Error en el servidor', error });
+  }
+};
+
+export const forgotPassword = async (req: Request, res: Response) => {
+  try {
+    const { phone } = req.body;
+    const user = await prisma.user.findFirst({ where: { phone } });
+
+    if (!user) {
+      // Return 200 even if it fails to prevent numbering enumeration
+      res.status(200).json({ message: 'Si el número existe, se ha enviado un SMS con el código.' });
+      return;
+    }
+
+    // Generate 6 digit numeric code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetPasswordToken: resetCode,
+        resetPasswordExpires
+      }
+    });
+
+    if (!process.env.TWILIO_ACCOUNT_SID) {
+       console.log('--- MOCK SMS ---');
+       console.log('To:', user.phone);
+       console.log('Tu código de recuperación es:', resetCode);
+       console.log('------------------');
+       res.status(200).json({ message: 'Si el número existe, se ha enviado un SMS con el código. (MOCK EN CONSOLA)' });
+       return;
+    }
+
+    // Here goes twilio logic
+    // const client = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    // await client.messages.create({ body: `Tu código de recuperación es: ${resetCode}`, from: process.env.TWILIO_PHONE, to: user.phone });
+
+    res.status(200).json({ message: 'Si el número existe, se ha enviado un SMS con el código.' });
+  } catch (error) {
+    console.error('Forgot Pass Error', error);
+    res.status(500).json({ message: 'Hubo un error al enviar el correo' });
+  }
+};
+
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const { phone, token, newPassword } = req.body;
+    
+    if (!phone || !token || !newPassword) {
+      res.status(400).json({ message: 'Teléfono, PIN y nueva contraseña son requeridos' });
+      return;
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        phone,
+        resetPasswordToken: token,
+        resetPasswordExpires: { gt: new Date() }
+      }
+    });
+
+    if (!user) {
+      res.status(400).json({ message: 'Token inválido o expirado' });
+      return;
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordExpires: null
+      }
+    });
+
+    res.status(200).json({ message: 'Contraseña actualizada con éxito' });
+  } catch (error) {
+    console.error('Reset Pass Error', error);
+    res.status(500).json({ message: 'Error interno reestableciendo contraseña' });
   }
 };

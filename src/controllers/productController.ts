@@ -19,7 +19,7 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
 export const createProduct = async (req: AuthRequest, res: Response) => {
   try {
     const businessId = req.user?.businessId;
-    const { name, description, buyPrice, sellPrice, stock, minStock } = req.body;
+    const { name, description, barcode, buyPrice, sellPrice, stock, minStock } = req.body;
     
     if (!name || sellPrice === undefined) {
       res.status(400).json({ message: 'Name and sellPrice are required' });
@@ -30,6 +30,7 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
       data: {
         name,
         description,
+        barcode: barcode || null,
         buyPrice: Number(buyPrice || 0),
         sellPrice: Number(sellPrice),
         stock: Number(stock || 0),
@@ -38,7 +39,11 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
       }
     });
     res.status(201).json(product);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      res.status(400).json({ message: 'Barcode already exists' });
+      return;
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -47,7 +52,7 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
   try {
     const businessId = req.user?.businessId;
     const { id } = req.params;
-
+    
     // Check if belongs to business
     const existing = await prisma.product.findFirst({ where: { id, businessId } });
     if (!existing) {
@@ -55,12 +60,21 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
        return;
     }
 
+    const { barcode, ...restData } = req.body;
+    
     const updated = await prisma.product.update({
       where: { id },
-      data: req.body
+      data: {
+        ...restData,
+        barcode: barcode || null,
+      }
     });
     res.json(updated);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      res.status(400).json({ message: 'Barcode already exists' });
+      return;
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
