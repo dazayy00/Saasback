@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes';
 import productRoutes from './routes/productRoutes';
 import saleRoutes from './routes/saleRoutes';
+import settingsRoutes from './routes/settingsRoutes';
+import { runMigrations } from './config/migrate';
 
 dotenv.config();
 
@@ -17,10 +19,12 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/sales', saleRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Healthcheck
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+    await runMigrations();
     console.log(`Server running on http://localhost:${PORT}`);
 });

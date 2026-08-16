@@ -45,7 +45,13 @@ export const createSale = async (req: AuthRequest, res: Response) => {
             }))
           }
         },
-        include: { items: true }
+        include: {
+          items: {
+            include: {
+              product: true
+            }
+          }
+        }
       });
 
       // 2. Descontar stock
