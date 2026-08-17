@@ -18,6 +18,24 @@ export const runMigrations = async () => {
       name: 'Add resetPasswordExpires to User',
       sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "resetPasswordExpires" TIMESTAMP(3);`
     },
+    {
+      name: 'Create StockEntry table',
+      sql: `
+        CREATE TABLE IF NOT EXISTS "StockEntry" (
+          "id" TEXT NOT NULL,
+          "productId" TEXT NOT NULL,
+          "quantity" INTEGER NOT NULL,
+          "previousStock" INTEGER NOT NULL DEFAULT 0,
+          "newStock" INTEGER NOT NULL DEFAULT 0,
+          "type" TEXT NOT NULL DEFAULT 'ENTRY',
+          "notes" TEXT,
+          "userName" TEXT,
+          "businessId" TEXT NOT NULL,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "StockEntry_pkey" PRIMARY KEY ("id")
+        );
+      `
+    },
   ];
 
   console.log('[Migration] Checking database schema...');

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../config/db';
+import { sendResetCodeEmail } from '../utils/mailer';
 
 const generateToken = (id: string, businessId: string) => {
   return jwt.sign({ id, businessId }, process.env.JWT_SECRET || 'secret', {
@@ -13,7 +14,7 @@ export const registerBusiness = async (req: Request, res: Response) => {
   try {
     const { businessName, name, email, password, phone } = req.body;
 
-    const userExists = await prisma.user.findUnique({ where: { email } });
+    const userExists = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (userExists) {
       res.status(400).json({ message: 'User already exists' });
       return;
@@ -29,7 +30,7 @@ export const registerBusiness = async (req: Request, res: Response) => {
         users: {
           create: {
             name,
-            email,
+            email: email.toLowerCase().trim(),
             phone,
             password: hashedPassword,
           },
@@ -59,7 +60,7 @@ export const loginUser = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: email.toLowerCase().trim() },
       include: { business: true },
     });
 
@@ -82,18 +83,25 @@ export const loginUser = async (req: Request, res: Response) => {
 
 export const forgotPassword = async (req: Request, res: Response) => {
   try {
-    const { phone } = req.body;
-    const user = await prisma.user.findFirst({ where: { phone } });
+    const { email } = req.body;
 
-    if (!user) {
-      // Return 200 even if it fails to prevent numbering enumeration
-      res.status(200).json({ message: 'Si el número existe, se ha enviado un SMS con el código.' });
+    if (!email || !email.trim()) {
+      res.status(400).json({ message: 'El correo electrónico es requerido.' });
       return;
     }
 
-    // Generate 6 digit numeric code
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+
+    if (!user) {
+      // Prevención de enumeración de usuarios
+      res.status(200).json({ message: 'Si el correo está registrado, se ha enviado un código de recuperación.' });
+      return;
+    }
+
+    // Generar código numérico de 6 dígitos
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    const resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
 
     await prisma.user.update({
       where: { id: user.id },
@@ -103,39 +111,33 @@ export const forgotPassword = async (req: Request, res: Response) => {
       }
     });
 
-    if (!process.env.TWILIO_ACCOUNT_SID) {
-      console.log('--- MOCK SMS ---');
-      console.log('To:', user.phone);
-      console.log('Tu código de recuperación es:', resetCode);
-      console.log('------------------');
-      res.status(200).json({ message: 'Si el número existe, se ha enviado un SMS con el código. (MOCK EN CONSOLA)' });
-      return;
-    }
+    // Enviar código por correo electrónico
+    await sendResetCodeEmail(user.email, resetCode, user.name);
 
-    // Here goes twilio logic
-    // const client = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    // await client.messages.create({ body: `Tu código de recuperación es: ${resetCode}`, from: process.env.TWILIO_PHONE, to: user.phone });
-
-    res.status(200).json({ message: 'Si el número existe, se ha enviado un SMS con el código.' });
+    res.status(200).json({
+      message: 'Si el correo está registrado, se ha enviado un código de recuperación.',
+      email: cleanEmail
+    });
   } catch (error) {
     console.error('Forgot Pass Error', error);
-    res.status(500).json({ message: 'Hubo un error al enviar el correo' });
+    res.status(500).json({ message: 'Hubo un error al procesar la solicitud de recuperación.' });
   }
 };
 
 export const verifyResetCode = async (req: Request, res: Response) => {
   try {
-    const { phone, token } = req.body;
+    const { email, token } = req.body;
 
-    if (!phone || !token) {
-      res.status(400).json({ message: 'Teléfono y código PIN son requeridos' });
+    if (!email || !token) {
+      res.status(400).json({ message: 'Correo y código PIN son requeridos' });
       return;
     }
 
+    const cleanEmail = email.toLowerCase().trim();
     const user = await prisma.user.findFirst({
       where: {
-        phone,
-        resetPasswordToken: token,
+        email: cleanEmail,
+        resetPasswordToken: token.trim(),
         resetPasswordExpires: { gt: new Date() }
       }
     });
@@ -154,23 +156,24 @@ export const verifyResetCode = async (req: Request, res: Response) => {
 
 export const resetPassword = async (req: Request, res: Response) => {
   try {
-    const { phone, token, newPassword } = req.body;
+    const { email, token, newPassword } = req.body;
 
-    if (!phone || !token || !newPassword) {
-      res.status(400).json({ message: 'Teléfono, PIN y nueva contraseña son requeridos' });
+    if (!email || !token || !newPassword) {
+      res.status(400).json({ message: 'Correo, PIN y nueva contraseña son requeridos' });
       return;
     }
 
+    const cleanEmail = email.toLowerCase().trim();
     const user = await prisma.user.findFirst({
       where: {
-        phone,
-        resetPasswordToken: token,
+        email: cleanEmail,
+        resetPasswordToken: token.trim(),
         resetPasswordExpires: { gt: new Date() }
       }
     });
 
     if (!user) {
-      res.status(400).json({ message: 'Token inválido o expirado' });
+      res.status(400).json({ message: 'Código PIN inválido o expirado' });
       return;
     }
 

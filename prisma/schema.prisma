@@ -7,12 +7,13 @@ datasource db {
 }
 
 model Business {
-  id        String    @id @default(uuid())
-  name      String
-  users     User[]
-  products  Product[]
-  sales     Sale[]
-  createdAt DateTime  @default(now())
+  id           String       @id @default(uuid())
+  name         String
+  users        User[]
+  products     Product[]
+  sales        Sale[]
+  stockEntries StockEntry[]
+  createdAt    DateTime     @default(now())
 }
 
 model User {
@@ -29,21 +30,37 @@ model User {
 }
 
 model Product {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  barcode     String?
-  buyPrice    Float
-  sellPrice   Float
-  stock       Int      @default(0)
-  minStock    Int      @default(5)
-  businessId  String
-  business    Business @relation(fields: [businessId], references: [id])
-  saleItems   SaleItem[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String       @id @default(uuid())
+  name         String
+  description  String?
+  barcode      String?
+  buyPrice     Float
+  sellPrice    Float
+  stock        Int          @default(0)
+  minStock     Int          @default(5)
+  businessId   String
+  business     Business     @relation(fields: [businessId], references: [id])
+  saleItems    SaleItem[]
+  stockEntries StockEntry[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   @@unique([barcode, businessId])
+}
+
+model StockEntry {
+  id            String   @id @default(uuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity      Int
+  previousStock Int
+  newStock      Int
+  type          String   @default("ENTRY") // ENTRY, INITIAL, ADJUSTMENT
+  notes         String?
+  userName      String?
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id])
+  createdAt     DateTime @default(now())
 }
 
 model Sale {
