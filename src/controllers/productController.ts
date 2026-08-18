@@ -185,7 +185,7 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
 export const updateProduct = async (req: AuthRequest, res: Response) => {
   try {
     const businessId = req.user?.businessId;
-    const { id } = req.params;
+    const id = req.params.id as string;
     
     // Check if belongs to business
     const existing = await prisma.product.findFirst({ where: { id, businessId } });
@@ -239,7 +239,7 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
 export const adjustStock = async (req: AuthRequest, res: Response) => {
   try {
     const businessId = req.user?.businessId;
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { amount, newStock, notes } = req.body;
 
     const existing = await prisma.product.findFirst({ where: { id, businessId } });
@@ -291,7 +291,7 @@ export const adjustStock = async (req: AuthRequest, res: Response) => {
 export const deleteProduct = async (req: AuthRequest, res: Response) => {
   try {
     const businessId = req.user?.businessId;
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const existing = await prisma.product.findFirst({ where: { id, businessId } });
     if (!existing) {

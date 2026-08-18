@@ -4,8 +4,8 @@ import jwt from 'jsonwebtoken';
 import prisma from '../config/db';
 import { sendResetCodeEmail } from '../utils/mailer';
 
-const generateToken = (id: string, businessId: string) => {
-  return jwt.sign({ id, businessId }, process.env.JWT_SECRET || 'secret', {
+const generateToken = (id: string, businessId: string, name?: string) => {
+  return jwt.sign({ id, businessId, name }, process.env.JWT_SECRET || 'secret', {
     expiresIn: '30d',
   });
 };
@@ -48,7 +48,7 @@ export const registerBusiness = async (req: Request, res: Response) => {
       email: user.email,
       businessId: user.businessId,
       businessName: business.name,
-      token: generateToken(user.id, user.businessId),
+      token: generateToken(user.id, user.businessId, user.name),
     });
   } catch (error) {
     console.error("Auth Register Error:", error);
@@ -71,7 +71,7 @@ export const loginUser = async (req: Request, res: Response) => {
         email: user.email,
         businessId: user.businessId,
         businessName: user.business.name,
-        token: generateToken(user.id, user.businessId),
+        token: generateToken(user.id, user.businessId, user.name),
       });
     } else {
       res.status(401).json({ message: 'Credenciales inválidas' });
